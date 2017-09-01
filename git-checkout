@@ -1,0 +1,138 @@
+#! /bin/bash
+
+# Get the branch name to check out
+branch=$1
+
+# Do you want to stash pop after the checkout?
+stashpop=$2
+
+# Current dir
+dir="`pwd`"
+
+# Format stuff
+b=$(tput bold)
+eb=$(tput sgr0)
+red="\033[0;31m"
+green="\033[0;32m"
+yellow="\033[0;33m"
+blue="\033[0;34m"
+purple="\033[0;35m"
+l_red="\033[0;91m"
+l_green="\033[0;92m"
+l_yellow="\033[0;93m"
+l_blue="\033[0;94m"
+l_cyan="\033[0;96m"
+b_red="\033[0;41m"
+b_green="\033[0;42m"
+b_yellow="\033[0;43m"
+b_blue="\033[0;44m"
+end="\033[0m"
+
+
+# Help
+if [[ $branch == "-h" ]] || [[ $branch == "-help" ]] || [[ $branch == "--h" ]] || [[ $branch == "--help" ]]
+then
+    echo -en "\n${b}How to use this script:${eb}\n\n"
+
+    echo -en "Options:\n"
+    echo -en "- ${green}<branch name>${end}: type the name to check out \n"
+    echo -en "- ${green}<stash pop>${end}: if you have uncommited files and want to stash pop them after the checkout use '${l_blue}pop${end}' option \n\n"
+
+    echo -en "Usage:\n"
+    echo -en "- ${green}git-checkout master${end}: will checkout master without performing a '${l_blue}stash pop${end}'\n"
+    echo -en "- ${green}git-checkout master pop${end}: will checkout master and will perform a '${l_blue}stash pop${end}'\n"
+    echo -en "- ${green}git-checkout myusername/mybranch${end}: will try to checkout branch '${l_blue}myusername/mybranch${end}' (but no '${l_blue}stash pop${end}')\n\n\n"
+
+    exit 0
+fi
+
+# Stash information
+if [[ $stashpop != "pop" ]]
+then
+    echo -en "${yellow}The changes won't be 'popped' to new branch checked out (but are still available via the 'git stash list' command)${end}\n"
+fi
+
+
+# Make sure directory ends with "/"
+if [[ $dir != */ ]]
+then
+        dir="$dir/*"
+else
+        dir="$dir*"
+fi
+
+# Loop all sub-directories
+for f in $dir
+do
+        # Only interested in directories
+        [ -d "${f}" ] || continue
+
+        echo -en "${purple}${f}${end}\n"
+
+        # Check if directory is a git repository
+        if [ -d "$f/.git" ]
+        then
+
+            error=0
+            # Change directory
+            cd $f
+
+
+            # Display branch name
+            branchname=$(git branch | grep \* | cut -d ' ' -f2-)
+            echo -en "Currently on branch: ${blue}$branchname${end}"
+
+            # Display how many uncommited files we have
+            uncommited_file=$(git ls-files -d -m -o | wc -l)
+            if [ $uncommited_file -ne 0 ]
+            then
+                echo -en "${b_red}Uncommited file(s):${end}  "
+                echo $uncommited_file
+
+                # we have uncommited files, need to stash first
+                echo -ne "${l_green}Stashing files${end}...\n"
+                git stash --quiet
+            fi
+
+            echo
+
+            echo -ne "${l_green}Performing fetch${end}...\n"
+            git fetch --prune origin --quiet
+
+            echo -ne "${l_green}Checking out branch${end} ${l_yellow}$branch${end}...\n"
+
+
+            check=$(git checkout ${branch} 2>&1)
+
+            if [ $(egrep error <<< $check -c) -eq 1 ]
+            then
+                error=1
+                echo -en "${b_red}Branch $branch does not exist. Create it first.${end}\n\n"
+            fi
+
+
+            if [ $error -eq 0 ]
+            then
+
+                echo -ne "${l_green}Pulling data${end}...\n"
+                git pull --quiet
+
+                # Perform stash pop
+                if [[ $stashpop == "pop" ]]
+                then
+                    git stash pop
+                fi
+
+                branchname=$(git branch | grep \* | cut -d ' ' -f2-)
+                echo -en "Now on branch: ${l_cyan}$branchname${end}\n"
+                echo -ne "${b_green}DONE!${end}\n\n"
+            fi
+
+        else
+                echo -en "${red}Not a git repository${end}\n\n"
+        fi
+
+done
+
+
+
